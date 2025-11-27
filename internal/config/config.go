@@ -35,6 +35,19 @@ type Config struct {
 	Mode    Mode
 	Filter  string
 
+	// Auth options
+	// When true, user operations in search mode (and the search phase of mode=both)
+	// will authenticate via SASL/EXTERNAL instead of simple bind. This typically
+	// requires either ldapi:// (Unix socket) or TLS client certificates.
+	SaslExternal bool
+
+	// Optional TLS client authentication materials. When provided and the
+	// connection is ldaps:// or ldap:// with --starttls, the client will present
+	// this certificate which can be used by servers that support SASL/EXTERNAL
+	// over TLS client auth.
+	TLSCertPath string
+	TLSKeyPath  string
+
 	Concurrency   int
 	Connections   int
 	Duration      time.Duration
@@ -56,14 +69,17 @@ func Parse() (*Config, error) {
 	pflag.StringVar(&cfg.LDAPURL, "ldap-url", "ldap://localhost:389", "LDAP URL, e.g. ldap://host:389, ldaps://host:636, or ldapi:// (Unix domain socket)")
 	pflag.BoolVar(&cfg.StartTLS, "starttls", false, "Use STARTTLS on ldap:// connections")
 	pflag.BoolVar(&cfg.InsecureSkipVerify, "insecure-skip-verify", false, "Skip TLS certificate verification (unsafe, test only)")
-	pflag.StringVar(&cfg.LookupBindDN, "lookup-bind-dn", "", "Lookup service account bind DN")
-	pflag.StringVar(&cfg.LookupBindPass, "lookup-bind-pass", "", "Lookup service account password")
+	pflag.StringVar(&cfg.TLSCertPath, "tls-cert", "", "Path to TLS client certificate (PEM) for mutual TLS")
+	pflag.StringVar(&cfg.TLSKeyPath, "tls-key", "", "Path to TLS client private key (PEM) for mutual TLS")
+	pflag.StringVar(&cfg.LookupBindDN, "lookup-bind-dn", "", "Lookup service account bind DN (optional when --sasl-external is set)")
+	pflag.StringVar(&cfg.LookupBindPass, "lookup-bind-pass", "", "Lookup service account password (optional when --sasl-external is set)")
 	pflag.StringVar(&cfg.BaseDN, "base-dn", "", "Base DN for user searches")
 	pflag.StringVar(&cfg.UIDAttr, "uid-attribute", "uid", "Attribute used to map username to DN (e.g., uid, sAMAccountName)")
 	pflag.StringVar(&cfg.CSVPath, "csv", "users.csv", "CSV file path with username,password header")
 	var mode string
 	pflag.StringVar(&mode, "mode", string(ModeAuth), "Benchmark mode: auth|search|both")
 	pflag.StringVar(&cfg.Filter, "filter", "(objectClass=person)", "LDAP filter for search mode; use %s as username placeholder when desired")
+	pflag.BoolVar(&cfg.SaslExternal, "sasl-external", false, "Use SASL/EXTERNAL for search mode (and search phase of mode=both)")
 	pflag.IntVar(&cfg.Concurrency, "concurrency", 32, "Number of concurrent workers")
 	pflag.IntVar(&cfg.Connections, "connections", 1, "Connections per worker (>=1)")
 	pflag.DurationVar(&cfg.Duration, "duration", time.Minute, "Total benchmark duration")
@@ -86,8 +102,13 @@ func Parse() (*Config, error) {
 		return nil, errors.New("base-dn is required")
 	}
 
-	if cfg.LookupBindDN == "" || cfg.LookupBindPass == "" {
-		return nil, errors.New("lookup-bind-dn and lookup-bind-pass are required")
+	// Lookup credentials are required only when not using SASL/EXTERNAL for
+	// the lookup connection. With --sasl-external, lookup DN resolution runs
+	// under the external identity and DN/password may be omitted.
+	if !cfg.SaslExternal {
+		if cfg.LookupBindDN == "" || cfg.LookupBindPass == "" {
+			return nil, errors.New("lookup-bind-dn and lookup-bind-pass are required (or use --sasl-external)")
+		}
 	}
 
 	if cfg.Concurrency <= 0 || cfg.Connections <= 0 {
@@ -99,5 +120,15 @@ func Parse() (*Config, error) {
 
 // TLSConfig returns a TLS config honoring the InsecureSkipVerify flag.
 func (c *Config) TLSConfig() *tls.Config {
-	return &tls.Config{InsecureSkipVerify: c.InsecureSkipVerify}
+	// Build a TLS config honoring InsecureSkipVerify and optional client certs.
+	cfg := &tls.Config{InsecureSkipVerify: c.InsecureSkipVerify}
+	if c.TLSCertPath != "" && c.TLSKeyPath != "" {
+		if cert, err := tls.LoadX509KeyPair(c.TLSCertPath, c.TLSKeyPath); err == nil {
+			cfg.Certificates = []tls.Certificate{cert}
+		}
+		// On error we intentionally ignore here; the dial will fail fast and
+		// surface a clear error to the user during connect/bind.
+	}
+
+	return cfg
 }

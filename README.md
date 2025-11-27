@@ -19,6 +19,7 @@ Project module path: github.com/croessner/ldapbench
 - Installation
 - CSV input format
 - Configuration and flags
+- SASL/EXTERNAL authentication (optional)
 - Workload model
 - Output and metrics
 - Failure logging
@@ -97,10 +98,12 @@ Core flags (see internal/config for full list):
   Enable STARTTLS when using ldap:// URLs
 - --insecure-skip-verify
   Skip TLS certificate verification (use only in controlled test setups)
+- --tls-cert / --tls-key
+  Optional TLS client certificate and private key (PEM files) for mutual TLS. Required when using SASL/EXTERNAL over TLS.
 - --lookup-bind-dn string
-  Service account DN used to resolve user DNs for bind/search
+  Service account DN used to resolve user DNs for bind/search (optional when --sasl-external is set)
 - --lookup-bind-pass string
-  Password for the lookup DN
+  Password for the lookup DN (optional when --sasl-external is set)
 - --base-dn string
   Base DN for user searches (required)
 - --uid-attribute string
@@ -111,6 +114,8 @@ Core flags (see internal/config for full list):
   Workload mode: auth | search | both (default: auth)
 - --filter string
   LDAP filter used in search mode. If it contains "%s", the username is substituted. Example: (&(objectClass=person)(uid=%s))
+- --sasl-external
+  Use SASL/EXTERNAL for DN lookup and the search step (mode=search and the search phase of mode=both). Requires ldapi:// or TLS client certificates. User bind for authentication tests remains simple bind with the user's DN/password.
 - Workload controls:
   - --concurrency int: number of workers
   - --connections int: number of LDAP connections in the pool
@@ -126,6 +131,46 @@ Core flags (see internal/config for full list):
   - --check: run a short end-to-end verification and exit
 
 Run `./ldapbench --help` for the authoritative list and defaults.
+
+
+## SASL/EXTERNAL authentication (optional)
+
+ldapbench can authenticate the search step with SASL/EXTERNAL when `--sasl-external` is set. This is useful when the server maps the client identity from:
+- LDAPI (Unix domain socket), or
+- TLS client certificates (mutual TLS) on LDAPS or LDAP+STARTTLS.
+
+Notes and behavior:
+- With `--sasl-external`, the lookup/service connection authenticates via SASL/EXTERNAL. DN resolution (LookupDN) runs under the socket/certificate identity.
+- The user search step also uses SASL/EXTERNAL when enabled.
+- `--mode=auth` and the user bind phase in `--mode=both` continue to use simple bind with the user's DN/password from the CSV.
+
+Examples:
+
+1) LDAPI with EXTERNAL (lookup credentials omitted):
+
+```
+./ldapbench \
+  --ldap-url ldapi://%2Fvar%2Frun%2Fslapd%2Fldapi \
+  --base-dn "dc=example,dc=com" \
+  --csv users.csv \
+  --mode search \
+  --sasl-external \
+  --check
+```
+
+2) LDAPS with mutual TLS and EXTERNAL for lookup + search:
+
+```
+./ldapbench \
+  --ldap-url ldaps://ldap.example.com:636 \
+  --tls-cert client.crt --tls-key client.key \
+  --base-dn "dc=example,dc=com" \
+  --csv users.csv \
+  --mode both \
+  --sasl-external
+```
+
+When using `ldap://` with `--starttls`, the same `--tls-cert/--tls-key` flags apply if your server supports EXTERNAL via TLS client auth.
 
 
 ## Workload model
@@ -186,6 +231,8 @@ When --fail-log is provided, failed operations are appended as CSV records. To m
 - For LDAPS (ldaps://), standard TLS is used.
 - --insecure-skip-verify disables certificate verification and should be used only in controlled testing.
  - For LDAPI (ldapi://), connections use a local Unix domain socket; TLS/STARTTLS are not applicable.
+ - Mutual TLS: provide `--tls-cert` and `--tls-key` (PEM) to present a client certificate. This is required for SASL/EXTERNAL over TLS.
+ - SASL/EXTERNAL: when `--sasl-external` is set, the lookup connection and the search step authenticate via EXTERNAL (requires LDAPI or mutual TLS). For these steps, the server derives identity from the socket or client certificate. User DN/password are still used for simple bind in auth mode and in the bind phase of mode=both.
 
 See internal/config TLSConfig for details.
 

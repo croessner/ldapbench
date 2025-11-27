@@ -5,7 +5,6 @@ package ldapclient
 // search operations.
 
 import (
-	"crypto/tls"
 	"fmt"
 	"strings"
 	"sync"
@@ -88,11 +87,20 @@ func (c *client) connectLookup() error {
 	return nil
 }
 
-// BindLookup performs a simple bind with the lookup account.
+// BindLookup authenticates the shared lookup connection used for DN resolution.
+//
+// When cfg.SaslExternal is true, we authenticate using SASL/EXTERNAL so that
+// DN resolution (LookupDN) runs under the socket/certificate identity. This is
+// typical for ldapi:// or mutual TLS setups. Otherwise we use a simple bind
+// with the configured lookup DN and password.
 func (c *client) BindLookup() error {
 	c.mu.Lock()
 	l := c.conn
 	c.mu.Unlock()
+
+	if c.cfg.SaslExternal {
+		return l.ExternalBind()
+	}
 
 	return l.Bind(c.cfg.LookupBindDN, c.cfg.LookupBindPass)
 }
@@ -128,7 +136,8 @@ func (c *client) LookupDN(username string) (string, error) {
 func (c *client) dialUser() (*ldap.Conn, error) {
 	// Same scheme handling as connectLookup.
 	if strings.HasPrefix(c.cfg.LDAPURL, "ldaps://") {
-		l, err := ldap.DialURL(c.cfg.LDAPURL, ldap.DialWithTLSConfig(&tls.Config{InsecureSkipVerify: c.cfg.InsecureSkipVerify}))
+		// Use shared TLS config to honor InsecureSkipVerify and optional client certs
+		l, err := ldap.DialURL(c.cfg.LDAPURL, ldap.DialWithTLSConfig(c.cfg.TLSConfig()))
 		if err != nil {
 			return nil, err
 		}
@@ -178,10 +187,22 @@ func (c *client) UserSearch(dn, password, filter string) (int, error) {
 		return 0, fmt.Errorf("no connection available")
 	}
 
-	if err := l.Bind(dn, password); err != nil {
-		c.putConn(l, err)
+	// Authenticate for the search phase.
+	// If SASL/EXTERNAL is enabled, use it; otherwise fall back to simple bind.
+	var authErr error
+	if c.cfg.SaslExternal {
+		// SASL/EXTERNAL requires either ldapi:// or TLS client certificates
+		// (mutual TLS). The underlying library performs the proper bind based
+		// on the active transport.
+		authErr = l.ExternalBind()
+	} else {
+		authErr = l.Bind(dn, password)
+	}
 
-		return 0, err
+	if authErr != nil {
+		c.putConn(l, authErr)
+
+		return 0, authErr
 	}
 
 	req := ldap.NewSearchRequest(

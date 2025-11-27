@@ -6,6 +6,7 @@ package main
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"os"
 	"os/signal"
@@ -95,6 +96,12 @@ func main() {
 
 	report.PrintSummary(os.Stdout, m, elapsed)
 	if err != nil {
+		// Treat context cancellation (Ctrl+C) and deadline (normal duration end)
+		// as clean shutdowns without surfacing a run error.
+		if errors.Is(err, context.Canceled) || errors.Is(err, context.DeadlineExceeded) {
+			return
+		}
+
 		fmt.Fprintf(os.Stderr, "run error: %v\n", err)
 		os.Exit(1)
 	}

@@ -41,16 +41,16 @@ func (r *Reporter) Run(ctx context.Context) {
 			suc := r.m.Success.Load()
 			fal := r.m.Fail.Load()
 
-			// Deltas for letzte Periode
+			// Deltas for the last period
 			deltaAtt := att - lastAtt
 			deltaSuc := suc - lastSuc
 			deltaFal := fal - lastFal
 
 			dur := t.Sub(lastAt).Seconds()
-			rps := 0.0           // Erfolgs-RPS (wie bisher)
-			arps := 0.0          // Attempts-RPS (alle Versuche/sek)
-			successRate := 0.0   // Gesamterfolg in % seit Start
-			intervalSRate := 0.0 // Erfolg % in der letzten Periode
+			rps := 0.0           // Success RPS (successful requests per second in last period)
+			arps := 0.0          // Attempts RPS (all attempts per second in last period)
+			successRate := 0.0   // Overall success rate in % since start
+			intervalSRate := 0.0 // Success rate % in the last period
 
 			if dur > 0 {
 				rps = float64(deltaSuc) / dur

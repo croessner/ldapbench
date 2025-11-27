@@ -149,6 +149,31 @@ Metrics are maintained via atomic counters and include Attempts, Successes, Fail
 
 For automated environments, capture stdout/stderr and parse only the final summary to avoid noise from periodic reports.
 
+### Meaning of the periodic [stats] line
+
+Example output:
+
+    [stats] elapsed=2m0s attempts=274516 success=274484 fail=0 rps=2316.08 arps=2316.08 srate=99.99% israte=100.00% ds=138965 df=0
+
+Fields explained:
+
+- elapsed: Total runtime since the benchmark started (here: 2 minutes).
+- attempts: Cumulative number of all attempts (bind/search operations) since start.
+- success: Cumulative number of successful attempts since start.
+- fail: Cumulative number of failed attempts since start.
+- rps: Successful requests per second within the last reporting interval only (deltaSuccess / seconds in the last period).
+- arps: Attempts per second (all attempts, successful + failed) within the last reporting interval (deltaAttempts / seconds in the last period).
+- srate: Overall success rate in percent since start (success / attempts).
+- israte: Interval success rate in percent for the last period only (deltaSuccess / deltaAttempts).
+- ds: Delta success — number of successful operations in the last period.
+- df: Delta fail — number of failed operations in the last period.
+
+Notes:
+
+- Periodic values (rps, arps, israte, ds, df) always refer to the most recent reporting interval (--stats-interval). They show short-term fluctuations.
+- Cumulative counters (attempts, success, fail, srate) apply to the entire runtime so far.
+- At the end of the run, an additional summary is printed. There, “avg rps (success)” is the average over the whole runtime (success / elapsed), in contrast to rps in the [stats] line, which reflects only the last interval.
+
 
 ## Failure logging
 

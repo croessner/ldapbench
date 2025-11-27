@@ -53,7 +53,7 @@ type Config struct {
 // Parse reads CLI flags into a Config instance and validates essential fields.
 func Parse() (*Config, error) {
 	var cfg Config
-	pflag.StringVar(&cfg.LDAPURL, "ldap-url", "ldap://localhost:389", "LDAP URL, e.g. ldap://host:389 or ldaps://host:636")
+	pflag.StringVar(&cfg.LDAPURL, "ldap-url", "ldap://localhost:389", "LDAP URL, e.g. ldap://host:389, ldaps://host:636, or ldapi:// (Unix domain socket)")
 	pflag.BoolVar(&cfg.StartTLS, "starttls", false, "Use STARTTLS on ldap:// connections")
 	pflag.BoolVar(&cfg.InsecureSkipVerify, "insecure-skip-verify", false, "Skip TLS certificate verification (unsafe, test only)")
 	pflag.StringVar(&cfg.LookupBindDN, "lookup-bind-dn", "", "Lookup service account bind DN")

@@ -8,7 +8,7 @@ ldapbench drives authentication (bind) and/or search workloads against an LDAP s
 - Simple CSV input for test users
 - Configurable concurrency, connection pool size, duration, and optional global rate limiting
 - Modes: auth, search, or both
-- STARTTLS and LDAPS support; optional TLS verification skip for test rigs
+- STARTTLS, LDAPS, and LDAPI (Unix domain socket) support; optional TLS verification skip for test rigs
 - Periodic and final summary reporting; optional failure CSV logging
 
 Project module path: github.com/croessner/ldapbench
@@ -92,7 +92,7 @@ Notes:
 
 Core flags (see internal/config for full list):
 - --ldap-url string
-  LDAP URL, e.g. ldap://host:389 or ldaps://host:636
+  LDAP URL, e.g. ldap://host:389, ldaps://host:636, or ldapi:// (Unix domain socket; path URL-encoded, e.g., ldapi://%2Fvar%2Frun%2Fslapd%2Fldapi)
 - --starttls
   Enable STARTTLS when using ldap:// URLs
 - --insecure-skip-verify
@@ -185,6 +185,7 @@ When --fail-log is provided, failed operations are appended as CSV records. To m
 - STARTTLS can be enabled with --starttls on ldap:// connections.
 - For LDAPS (ldaps://), standard TLS is used.
 - --insecure-skip-verify disables certificate verification and should be used only in controlled testing.
+ - For LDAPI (ldapi://), connections use a local Unix domain socket; TLS/STARTTLS are not applicable.
 
 See internal/config TLSConfig for details.
 

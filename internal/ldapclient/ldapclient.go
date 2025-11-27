@@ -60,11 +60,14 @@ func (c *client) connectLookup() error {
 	var l *ldap.Conn
 	var err error
 
+	// Dial according to URL scheme. ldap library supports ldap://, ldaps://, and ldapi://.
+	// We only apply StartTLS on plain ldap://; ldaps:// uses TLS from the start and
+	// ldapi:// (Unix domain socket) does not support StartTLS.
 	if strings.HasPrefix(c.cfg.LDAPURL, "ldaps://") {
 		l, err = ldap.DialURL(c.cfg.LDAPURL, ldap.DialWithTLSConfig(c.cfg.TLSConfig()))
 	} else {
 		l, err = ldap.DialURL(c.cfg.LDAPURL)
-		if err == nil && c.cfg.StartTLS {
+		if err == nil && c.cfg.StartTLS && strings.HasPrefix(c.cfg.LDAPURL, "ldap://") {
 			if err2 := l.StartTLS(c.cfg.TLSConfig()); err2 != nil {
 				l.Close()
 				err = err2
@@ -123,6 +126,7 @@ func (c *client) LookupDN(username string) (string, error) {
 
 // dialUser creates a new connection for a user operation (bind/search).
 func (c *client) dialUser() (*ldap.Conn, error) {
+	// Same scheme handling as connectLookup.
 	if strings.HasPrefix(c.cfg.LDAPURL, "ldaps://") {
 		l, err := ldap.DialURL(c.cfg.LDAPURL, ldap.DialWithTLSConfig(&tls.Config{InsecureSkipVerify: c.cfg.InsecureSkipVerify}))
 		if err != nil {
@@ -139,7 +143,7 @@ func (c *client) dialUser() (*ldap.Conn, error) {
 		return nil, err
 	}
 
-	if c.cfg.StartTLS {
+	if c.cfg.StartTLS && strings.HasPrefix(c.cfg.LDAPURL, "ldap://") {
 		if err := l.StartTLS(c.cfg.TLSConfig()); err != nil {
 			l.Close()
 

@@ -88,6 +88,13 @@ func (r *Runner) Run(ctx context.Context) error {
 // runOnce performs a single attempt depending on the configured mode.
 func (r *Runner) runOnce() {
 	r.m.Attempts.Add(1)
+	start := time.Now()
+
+	// record latency for the whole attempt (lookup + op); includes failures
+	defer func() {
+		r.m.Lat.Record(time.Since(start))
+	}()
+
 	user := r.users.All[rand.Intn(len(r.users.All))]
 
 	// Lookup DN using the service account

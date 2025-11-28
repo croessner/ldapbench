@@ -65,8 +65,11 @@ func (r *Reporter) Run(ctx context.Context) {
 				intervalSRate = (float64(deltaSuc) / float64(deltaAtt)) * 100
 			}
 
-			fmt.Printf("[stats] elapsed=%v attempts=%d success=%d fail=%d rps=%.2f arps=%.2f srate=%.2f%% israte=%.2f%% ds=%d df=%d\n",
-				time.Since(r.m.Start).Truncate(time.Second), att, suc, fal, rps, arps, successRate, intervalSRate, deltaSuc, deltaFal)
+			// window latency stats since last tick
+			wlat := r.m.Lat.WindowSnapshotAndReset()
+			fmt.Printf("[stats] elapsed=%v attempts=%d success=%d fail=%d rps=%.2f arps=%.2f srate=%.2f%% israte=%.2f%% ds=%d df=%d avg=%.2f p50=%.2f p95=%.2f p99=%.2f wcnt=%d\n",
+				time.Since(r.m.Start).Truncate(time.Second), att, suc, fal, rps, arps, successRate, intervalSRate, deltaSuc, deltaFal,
+				float64(wlat.Avg.Microseconds())/1000.0, float64(wlat.P50.Microseconds())/1000.0, float64(wlat.P95.Microseconds())/1000.0, float64(wlat.P99.Microseconds())/1000.0, wlat.Count)
 
 			lastAtt = att
 			lastSuc = suc
@@ -96,4 +99,16 @@ func PrintSummary(w io.Writer, m *metrics.Metrics, elapsed time.Duration) {
 	fmt.Fprintf(w, "success: %d\n", suc)
 	fmt.Fprintf(w, "fail: %d\n", fal)
 	fmt.Fprintf(w, "avg rps (success): %.2f\n", rps)
+
+	// Total latency stats for the whole run
+	tlat := m.Lat.TotalSnapshot()
+	if tlat.Count > 0 {
+		fmt.Fprintf(w, "latency (overall): count=%d avg_ms=%.2f p50_ms=%.2f p95_ms=%.2f p99_ms=%.2f\n",
+			tlat.Count,
+			float64(tlat.Avg.Microseconds())/1000.0,
+			float64(tlat.P50.Microseconds())/1000.0,
+			float64(tlat.P95.Microseconds())/1000.0,
+			float64(tlat.P99.Microseconds())/1000.0,
+		)
+	}
 }

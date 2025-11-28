@@ -190,7 +190,9 @@ Search filter handling:
 
 ## Output and metrics
 
-Metrics are maintained via atomic counters and include Attempts, Successes, Failures, and elapsed time. The reporter prints periodic stats at --stats-interval and a final summary with rates derived from the snapshot.
+Metrics are maintained via atomic counters and include Attempts, Successes, Failures, and elapsed time. In addition, ldapbench records per-request latencies and reports them both per-interval and in the final summary.
+
+The reporter prints periodic stats at --stats-interval and a final summary with rates and latency percentiles.
 
 For automated environments, capture stdout/stderr and parse only the final summary to avoid noise from periodic reports.
 
@@ -198,7 +200,7 @@ For automated environments, capture stdout/stderr and parse only the final summa
 
 Example output:
 
-    [stats] elapsed=2m0s attempts=274516 success=274484 fail=0 rps=2316.08 arps=2316.08 srate=99.99% israte=100.00% ds=138965 df=0
+    [stats] elapsed=2m0s attempts=274516 success=274484 fail=0 rps=2316.08 arps=2316.08 srate=99.99% israte=100.00% ds=138965 df=0 lat_avg_ms=2.31 lat_p50_ms=1.70 lat_p95_ms=5.40 lat_p99_ms=9.80 wcount=231610
 
 Fields explained:
 
@@ -212,12 +214,18 @@ Fields explained:
 - israte: Interval success rate in percent for the last period only (deltaSuccess / deltaAttempts).
 - ds: Delta success — number of successful operations in the last period.
 - df: Delta fail — number of failed operations in the last period.
+- avg: Average request latency in milliseconds for the last reporting interval (window average).
+- p50: Median (50th percentile) request latency in milliseconds for the last interval.
+- p95: 95th percentile request latency in milliseconds for the last interval.
+- p99: 99th percentile request latency in milliseconds for the last interval.
+- wcnt: Number of requests observed in the last interval’s latency window (useful to judge percentile stability).
 
 Notes:
 
 - Periodic values (rps, arps, israte, ds, df) always refer to the most recent reporting interval (--stats-interval). They show short-term fluctuations.
 - Cumulative counters (attempts, success, fail, srate) apply to the entire runtime so far.
 - At the end of the run, an additional summary is printed. There, “avg rps (success)” is the average over the whole runtime (success / elapsed), in contrast to rps in the [stats] line, which reflects only the last interval.
+- The summary also includes overall latency statistics (avg, p50, p95, p99) for the entire run. Percentiles are computed from a bounded reservoir sample to keep memory usage predictable; treat them as approximate for very long runs. Interval latencies are computed from exact data for that interval.
 
 
 ## Failure logging

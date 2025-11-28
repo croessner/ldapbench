@@ -228,6 +228,62 @@ Notes:
 - The summary also includes overall latency statistics (avg, p50, p95, p99) for the entire run. Percentiles are computed from a bounded reservoir sample to keep memory usage predictable; treat them as approximate for very long runs. Interval latencies are computed from exact data for that interval.
 
 
+### Real-world end-to-end example (LDAPI + SASL/EXTERNAL, search mode)
+
+The following shows a real invocation against an LDAPI endpoint using SASL/EXTERNAL in search mode.
+
+Check the configuration first:
+
+```
+$ ./ldapbench --base-dn "ou=tests,ou=people,ou=it,dc=example,dc=org" \
+    --connections 2 \
+    --csv ~/data/logins.local.csv \
+    --duration 5m \
+    --filter "(&(uniqueIdentifier=%s)(objectClass=person))" \
+    --uid-attribute "uniqueIdentifier" \
+    --ldap-url "ldapi:///usr/local/var/run/ldapi" \
+    --sasl-external \
+    --mode search \
+    --check
+OK: CSV '/Users/example/data/logins.local.csv' loaded (25000 users)
+OK: Lookup bind
+OK: DN for user 'user00001' found: uid=ebba46a6-8c20-4e80-8618-9d6671a4312b,ou=tests,ou=people,ou=it,dc=example,dc=org
+OK: Search with filter '(&(uniqueIdentifier=user00001)(objectClass=person))'
+check: OK
+```
+
+Then run the benchmark (5 minutes here) and observe periodic stats and the final summary:
+
+```
+$ ./ldapbench --base-dn "ou=tests,ou=people,ou=it,dc=example,dc=org" \
+    --connections 2 \
+    --csv ~/data/logins.local.csv \
+    --duration 5m \
+    --filter "(&(uniqueIdentifier=%s)(objectClass=person))" \
+    --uid-attribute "uniqueIdentifier" \
+    --ldap-url "ldapi:///usr/local/var/run/ldapi" \
+    --sasl-external \
+    --mode search
+[stats] elapsed=1m0s attempts=985219 success=985187 fail=0 rps=16419.78 arps=16420.32 srate=100.00% israte=100.00% ds=985187 df=0 avg=1.95 p50=1.29 p95=2.85 p99=18.94 wcnt=985187
+[stats] elapsed=2m0s attempts=1870120 success=1870088 fail=0 rps=14748.35 arps=14748.35 srate=100.00% israte=100.00% ds=884901 df=0 avg=2.16 p50=1.32 p95=3.11 p99=19.09 wcnt=884901
+[stats] elapsed=3m0s attempts=2759441 success=2759409 fail=0 rps=14822.02 arps=14822.02 srate=100.00% israte=100.00% ds=889321 df=0 avg=2.15 p50=1.31 p95=3.12 p99=19.10 wcnt=889321
+[stats] elapsed=4m0s attempts=3653830 success=3653798 fail=0 rps=14906.49 arps=14906.49 srate=100.00% israte=100.00% ds=894389 df=0 avg=2.14 p50=1.30 p95=3.09 p99=19.07 wcnt=894389
+[stats] elapsed=5m0s attempts=4523766 success=4523735 fail=0 rps=14498.95 arps=14498.93 srate=100.00% israte=100.00% ds=869937 df=0 avg=2.20 p50=1.34 p95=3.20 p99=19.16 wcnt=869937
+
+==== Summary ====
+elapsed: 5m0.118s
+attempts: 4523766
+success: 4523766
+fail: 0
+avg rps (success): 15073.26
+latency (overall): count=4523766 avg_ms=2.12 p50_ms=1.30 p95_ms=2.92 p99_ms=19.04
+```
+
+Notes:
+- The example uses LDAPI with SASL/EXTERNAL; no lookup DN/password are required.
+- The base DN and DN printed by the check step use dc=example,dc=org as an anonymized domain component.
+
+
 ## Failure logging
 
 When --fail-log is provided, failed operations are appended as CSV records. To minimize I/O overhead during benchmarks, writes are batched; configure with --fail-batch. Use a path on a fast filesystem.
